@@ -1,3 +1,9 @@
+# Raw data (too large for Git)
+data/raw/
+
+# Test scripts (temporary)
+test_extract.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
