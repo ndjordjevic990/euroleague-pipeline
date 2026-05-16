@@ -129,13 +129,92 @@ def track_lineups(events: list, players_a: list, players_b: list,
     starters_a = get_starters(players_a)
     starters_b = get_starters(players_b)
 
+    # Reorder: within each substitution block, process OUTs before INs per team
+    events = _reorder_substitutions(events)
+
     tracker = LineupTracker(starters_a, starters_b, team_a_code, team_b_code)
 
-    for event in events:
-        tracker.process_event(event)
+    # Process all events but handle substitution blocks atomically
+    i = 0
+    while i < len(events):
+        event = events[i]
+
+        if event.get("play_type") not in ("IN", "OUT"):
+            # Normal event — process and attach lineup
+            tracker.process_event(event)
+            i += 1
+            continue
+
+        # Collect the entire substitution block
+        block_time = event.get("marker_time")
+        block_start = i
+        while (i < len(events)
+               and events[i].get("play_type") in ("IN", "OUT")
+               and events[i].get("marker_time") == block_time):
+            # Process the substitution (updates internal state)
+            tracker.process_event(events[i])
+            i += 1
+
+        # Now attach the FINAL lineup to ALL events in this block
+        for j in range(block_start, i):
+            events[j]["lineup_a"] = sorted(tracker.on_court_a)
+            events[j]["lineup_b"] = sorted(tracker.on_court_b)
+            events[j]["lineup_size_a"] = len(tracker.on_court_a)
+            events[j]["lineup_size_b"] = len(tracker.on_court_b)
 
     if tracker.warnings:
         for w in tracker.warnings:
             logger.warning(f"Lineup: {w}")
 
     return events, tracker.warnings
+
+
+def _reorder_substitutions(events: list) -> list:
+    """Reorder IN/OUT events so OUTs come before INs per team within each block.
+    
+    A substitution block is a consecutive run of IN/OUT events
+    at the same marker_time. Within each block, for EACH TEAM separately,
+    we place OUT events before IN events.
+    """
+    result = []
+    i = 0
+
+    while i < len(events):
+        event = events[i]
+
+        # If not a substitution, just append
+        if event.get("play_type") not in ("IN", "OUT"):
+            result.append(event)
+            i += 1
+            continue
+
+        # Collect the entire substitution block
+        block_time = event.get("marker_time")
+        block = []
+
+        while (i < len(events)
+               and events[i].get("play_type") in ("IN", "OUT")
+               and events[i].get("marker_time") == block_time):
+            block.append(events[i])
+            i += 1
+
+        # Group by team
+        teams_in_block = {}
+        for e in block:
+            team = e.get("team_code", "")
+            if team not in teams_in_block:
+                teams_in_block[team] = []
+            teams_in_block[team].append(e)
+
+        # For each team: OUTs first, then INs
+        reordered_block = []
+        for team in teams_in_block:
+            team_events = teams_in_block[team]
+            outs = [e for e in team_events if e["play_type"] == "OUT"]
+            ins = [e for e in team_events if e["play_type"] == "IN"]
+            reordered_block.extend(outs)
+            reordered_block.extend(ins)
+
+        result.extend(reordered_block)
+
+    return result

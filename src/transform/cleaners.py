@@ -135,7 +135,8 @@ def clean_playbyplay(raw_pbp: dict) -> list:
         "FirstQuarter": 1,
         "SecondQuarter": 2,
         "ThirdQuarter": 3,
-        "FourthQuarter": 4,
+        "ForthQuarter": 4,      # API typo: "Forth" not "Fourth"
+        "FourthQuarter": 4,     # In case they ever fix it
         "ExtraTime": 5,
     }
 
