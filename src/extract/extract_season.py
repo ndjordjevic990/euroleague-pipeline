@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_season(season_code: str, max_game_code: int = 400) -> list[int]:
-    """Extract all games for a season.
+    """Extract all games for a season, skipping already downloaded games.
     
     Since there's no schedule API, we iterate through game codes
     and stop after consecutive misses.
@@ -28,15 +28,28 @@ def extract_season(season_code: str, max_game_code: int = 400) -> list[int]:
     Returns:
         List of successfully extracted game codes.
     """
+    from pathlib import Path
+    from src.config import RAW_DATA_DIR
+
+    season_dir = Path(RAW_DATA_DIR) / season_code
+
     logger.info(f"{'='*60}")
     logger.info(f"Starting extraction for season {season_code}")
     logger.info(f"{'='*60}")
 
     extracted_games = []
+    skipped_games = []
     consecutive_misses = 0
-    max_consecutive_misses = 20  # Stop after 20 misses in a row
+    max_consecutive_misses = 20
 
     for game_code in range(1, max_game_code + 1):
+        # Skip if already downloaded
+        file_path = season_dir / f"game_{game_code:03d}.json"
+        if file_path.exists():
+            skipped_games.append(game_code)
+            consecutive_misses = 0  # Existing file = game exists
+            continue
+
         logger.info(f"--- Game {game_code} ---")
 
         game_data = fetch_game(season_code, game_code)
@@ -53,17 +66,17 @@ def extract_season(season_code: str, max_game_code: int = 400) -> list[int]:
                 break
             continue
 
-        # Game exists — save it
         consecutive_misses = 0
         save_game(game_data, season_code, game_code)
         extracted_games.append(game_code)
 
-        # Small delay between games
         time.sleep(REQUEST_DELAY)
 
     logger.info(f"{'='*60}")
-    logger.info(f"Season {season_code} complete: {len(extracted_games)} games extracted")
-    logger.info(f"Game codes: {extracted_games[:10]}{'...' if len(extracted_games) > 10 else ''}")
+    logger.info(f"Season {season_code} complete:")
+    logger.info(f"  Skipped (already existed): {len(skipped_games)}")
+    logger.info(f"  Newly extracted: {len(extracted_games)}")
+    logger.info(f"  Total games: {len(skipped_games) + len(extracted_games)}")
     logger.info(f"{'='*60}")
 
     return extracted_games
