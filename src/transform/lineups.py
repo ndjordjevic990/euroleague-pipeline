@@ -46,14 +46,9 @@ class LineupTracker:
     def process_event(self, event: dict) -> dict:
         """Process a single event and attach current lineup state.
         
-        Handles IN/OUT substitutions, then attaches the current
-        on-court players to the event.
-        
-        Args:
-            event: A cleaned PBP event dict.
-            
-        Returns:
-            The same event dict with lineup fields added.
+        Handles IN/OUT substitutions with tolerance for bad data:
+        - OUT for player not on court: log warning, skip
+        - IN for player already on court: log warning, skip
         """
         play_type = event.get("play_type")
         team_code = event.get("team_code")
@@ -70,6 +65,7 @@ class LineupTracker:
                         f"Event #{event.get('event_id')}: OUT for {player_id} "
                         f"({team_code}) but player not on court"
                     )
+                    # Don't discard — player wasn't there
 
         elif play_type == "IN" and player_id and team_code:
             court = self._get_court(team_code)
@@ -79,7 +75,9 @@ class LineupTracker:
                         f"Event #{event.get('event_id')}: IN for {player_id} "
                         f"({team_code}) but player already on court"
                     )
-                court.add(player_id)
+                    # Don't add — player already there
+                else:
+                    court.add(player_id)
 
         # Attach current lineup to event
         event["lineup_a"] = sorted(self.on_court_a)
@@ -114,18 +112,7 @@ def get_starters(players: list) -> set[str]:
 
 def track_lineups(events: list, players_a: list, players_b: list,
                   team_a_code: str, team_b_code: str) -> tuple[list, list[str]]:
-    """Track lineups through all events in a game.
-    
-    Args:
-        events: Cleaned and sorted PBP events.
-        players_a: Cleaned players list for team A.
-        players_b: Cleaned players list for team B.
-        team_a_code: Team code for team A.
-        team_b_code: Team code for team B.
-        
-    Returns:
-        Tuple of (enriched_events, warnings).
-    """
+    """Track lineups through all events in a game."""
     starters_a = get_starters(players_a)
     starters_b = get_starters(players_b)
 
@@ -165,6 +152,10 @@ def track_lineups(events: list, players_a: list, players_b: list,
     if tracker.warnings:
         for w in tracker.warnings:
             logger.warning(f"Lineup: {w}")
+
+    # Re-sort by event_id to restore chronological order
+    # (substitution reordering may have displaced some events)
+    events.sort(key=lambda e: e.get("event_id", 0))
 
     return events, tracker.warnings
 

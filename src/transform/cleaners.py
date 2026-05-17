@@ -47,12 +47,18 @@ def clean_header(raw_header: dict) -> dict:
         "ScoreQuarter1B", "ScoreQuarter2B", "ScoreQuarter3B", "ScoreQuarter4B",
         "ScoreExtraTimeA", "ScoreExtraTimeB", "Capacity",
     ]
+    
     for field in int_fields:
         if field in h and h[field] is not None:
             try:
-                h[field] = int(h[field])
+                val = h[field]
+                if isinstance(val, str) and val.strip() == "":
+                    h[field] = None
+                else:
+                    h[field] = int(val)
             except (ValueError, TypeError):
                 logger.warning(f"Header: Could not cast {field}={h[field]!r} to int")
+                h[field] = None
 
     # Rename typo field
     if "FoultsA" in h:

@@ -222,3 +222,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Database files
+data/*.duckdb
+
+# Raw data (too large for Git)
+data/raw/
+
+# Test scripts (temporary)
+test_extract.py
+test_*.py
+explore_*.py
+fix_*.py
+load_all.py
+extract_all.py

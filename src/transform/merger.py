@@ -87,23 +87,27 @@ def forward_fill_score(events: list) -> list:
     
     Only scoring events have points_a/points_b populated.
     This fills in the current score for all events based on
-    the last known scoring event.
+    the last known scoring event. Ignores score values that
+    would go backward (data quality issue in some games).
     
     Args:
         events: List of events sorted by event_id.
         
     Returns:
-        Same list with scores filled in. Events before the first
-        scoring event get score 0-0.
+        Same list with scores filled in.
     """
     current_a = 0
     current_b = 0
 
     for event in events:
-        if event.get("points_a") is not None:
-            current_a = event["points_a"]
-        if event.get("points_b") is not None:
-            current_b = event["points_b"]
+        pa = event.get("points_a")
+        pb = event.get("points_b")
+
+        # Only update if score moves forward (or stays same)
+        if pa is not None and pa >= current_a:
+            current_a = pa
+        if pb is not None and pb >= current_b:
+            current_b = pb
 
         event["score_a"] = current_a
         event["score_b"] = current_b
